@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  /* Colors - these become available as bg-*, text-*, border-* utilities */
+  --color-primary: #39424E;
+
+  /* Font families - these become available as font-* utilities */
+  --font-sans: "Didact Gothic", sans-serif;
+  --font-mono: "Source Code Pro", monospace;
+}
+
+body {
+  background-color: #39424E;
+  font-family: var(--font-sans);
+}
