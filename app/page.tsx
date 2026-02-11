@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { calculateSimilarity } from './utils/phonetic';
 
 // Language options
@@ -87,6 +88,7 @@ type SearchResult = DictionaryEntry & {
 };
 
 export default function PhoneticWordFinder() {
+  const searchParams = useSearchParams();
   const [language, setLanguage] = useState('en_US');
   const [dictionary, setDictionary] = useState<DictionaryEntry[] | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,6 +96,112 @@ export default function PhoneticWordFinder() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [hasPerformedInitialSearch, setHasPerformedInitialSearch] = useState(false);
+  const hasSyncedFromUrlRef = useRef(false);
+  const prevLanguageRef = useRef<string | null>(null);
+
+  // Initialize from query params (only once)
+  useEffect(() => {
+    if (hasSyncedFromUrlRef.current) return;
+
+    const q = searchParams.get('q');
+    const lang = searchParams.get('lang');
+
+    if (lang) {
+      setLanguage(lang);
+    }
+    if (q) {
+      setSearchQuery(q);
+    }
+
+    setIsInitialized(true);
+    hasSyncedFromUrlRef.current = true;
+  }, [searchParams]);
+
+  // Perform search
+  const performSearch = useCallback((query: string) => {
+    if (!query.trim()) {
+      setError('Please enter a word or IPA notation');
+      return;
+    }
+
+    if (!dictionary || dictionary.length === 0) {
+      setError('Dictionary not loaded. Please wait.');
+      return;
+    }
+
+    setError('');
+    setResults([]); // Clear previous results
+    setLoading(true);
+
+    setTimeout(() => {
+      let queryIPA = query;
+
+      const isIPAInput = /^[\/\[]/.test(query) || /[ɑæɔəɛɪʊʌɜθðʃʒŋɹ]/.test(query);
+
+      if (!isIPAInput) {
+        const found = dictionary.find((item: DictionaryEntry) =>
+          item.word.toLowerCase() === query.toLowerCase()
+        );
+        if (found) {
+          queryIPA = found.ipa;
+        } else {
+          setError(`Could not find pronunciation for "${query}". Try IPA notation.`);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const searchResults = dictionary
+        .map((item: DictionaryEntry) => ({
+          ...item,
+          similarity: calculateSimilarity(queryIPA, item.ipa),
+          queryIPA
+        }))
+        .filter((item: SearchResult) => item.similarity > 30)
+        .sort((a: SearchResult, b: SearchResult) => b.similarity - a.similarity)
+        .slice(0, 50);
+
+      setResults(searchResults);
+      setLoading(false);
+    }, 100);
+  }, [dictionary]);
+
+  // Update URL when state changes (but not during initialization)
+  useEffect(() => {
+    if (!hasSyncedFromUrlRef.current) return;
+
+    const currentParams = new URLSearchParams(window.location.search);
+    const currentQ = currentParams.get('q') || '';
+    const currentLang = currentParams.get('lang') || 'en_US';
+
+    // Only update if something actually changed from what's in the URL
+    if (searchQuery === currentQ && language === currentLang) return;
+
+    const params = new URLSearchParams();
+    if (searchQuery) {
+      params.set('q', searchQuery);
+    }
+    if (language && language !== 'en_US') {
+      params.set('lang', language);
+    } else if (language === 'en_US' && currentLang !== 'en_US') {
+      // If switching back to default, remove lang param
+      if (searchQuery) {
+        params.set('q', searchQuery);
+      }
+    }
+
+    const newUrl = params.toString()
+      ? `${window.location.pathname}?${params.toString()}`
+      : window.location.pathname;
+
+    // Only update if URL actually changed
+    const currentUrl = window.location.pathname + (window.location.search || '');
+    if (newUrl !== currentUrl) {
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [searchQuery, language]);
 
   // Load dictionary
   useEffect(() => {
@@ -130,53 +238,32 @@ export default function PhoneticWordFinder() {
     loadDictionary();
   }, [language]);
 
-  // Perform search
-  const performSearch = (query: string) => {
-    if (!query.trim()) {
-      setError('Please enter a word or IPA notation');
+  // Perform search when dictionary loads and we have a query from URL
+  useEffect(() => {
+    if (!isInitialized || !dictionary || dictionary.length === 0 || hasPerformedInitialSearch) return;
+
+    const q = searchParams.get('q');
+    if (q && q.trim()) {
+      performSearch(q);
+      setHasPerformedInitialSearch(true);
+    }
+  }, [dictionary, isInitialized, searchParams, hasPerformedInitialSearch, performSearch]);
+
+  // Rerun search when language changes (if we have a query)
+  useEffect(() => {
+    // Skip on initial mount
+    if (prevLanguageRef.current === null) {
+      prevLanguageRef.current = language;
       return;
     }
 
-    if (!dictionary || dictionary.length === 0) {
-      setError('Dictionary not loaded. Please wait.');
-      return;
+    // Only rerun if language actually changed and we have a query and dictionary
+    if (prevLanguageRef.current !== language && dictionary && dictionary.length > 0 && searchQuery.trim()) {
+      performSearch(searchQuery);
     }
 
-    setError('');
-    setLoading(true);
-
-    setTimeout(() => {
-      let queryIPA = query;
-
-      const isIPAInput = /^[\/\[]/.test(query) || /[ɑæɔəɛɪʊʌɜθðʃʒŋɹ]/.test(query);
-
-      if (!isIPAInput) {
-        const found = dictionary.find((item: DictionaryEntry) =>
-          item.word.toLowerCase() === query.toLowerCase()
-        );
-        if (found) {
-          queryIPA = found.ipa;
-        } else {
-          setError(`Could not find pronunciation for "${query}". Try IPA notation.`);
-          setLoading(false);
-          return;
-        }
-      }
-
-      const searchResults = dictionary
-        .map((item: DictionaryEntry) => ({
-          ...item,
-          similarity: calculateSimilarity(queryIPA, item.ipa),
-          queryIPA
-        }))
-        .filter((item: SearchResult) => item.similarity > 30)
-        .sort((a: SearchResult, b: SearchResult) => b.similarity - a.similarity)
-        .slice(0, 50);
-
-      setResults(searchResults);
-      setLoading(false);
-    }, 100);
-  };
+    prevLanguageRef.current = language;
+  }, [language, dictionary, searchQuery, performSearch]);
 
   const handleSearch = () => {
     performSearch(searchQuery);
@@ -264,7 +351,7 @@ export default function PhoneticWordFinder() {
         )}
 
         {/* Loading state */}
-        {loading && !results.length && (
+        {loading && (
           <div className="text-center py-16">
             <div className="inline-block w-12 h-12 border-4 border-gray-400 border-t-white rounded-full animate-spin mb-4 opacity-30"></div>
             <p className="text-gray-400">Searching...</p>
