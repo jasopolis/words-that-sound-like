@@ -16,7 +16,7 @@ Categories are set by:
 - Consonants by manner (stops, fricatives, nasals, liquids)
 - Voicing pairs (p/b, t/d, k/g, f/v, s/z, etc.)
 
-Note: I am not a linguist and this could work less well for non-Western languages. Definitely accepting any suggestions!
+Note: I am not a linguist and this definitely works less well for non-Western languages (extended IPA support would be a logical next step). Definitely accepting any suggestions!
 
 ## Getting Started
 

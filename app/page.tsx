@@ -79,10 +79,12 @@ const LANGUAGE_EXAMPLES: Record<string, string[]> = {
 
 type DictionaryEntry = {
   word: string;
-  ipa: string;
+  ipas: string[];
 };
 
-type SearchResult = DictionaryEntry & {
+type SearchResult = {
+  word: string;
+  ipa: string;
   similarity: number;
   queryIPA: string;
 };
@@ -108,6 +110,17 @@ function PhoneticWordFinderContent() {
   const INITIAL_ITEMS = 50;
   const ITEMS_PER_LOAD = 50;
   const MAX_RESULTS = 1000;
+
+  const splitIpaVariants = useCallback((ipaField: string): string[] => {
+    // Raw data can contain multiple pronunciations like:
+    //   /tɝˈeɪsə/, /tɝˈisə/
+    // We keep each variant as its own IPA string so the phonetic
+    // matcher doesn't treat commas/spaces as phonemes.
+    return ipaField
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }, []);
 
   // Initialize from query params (only once)
   useEffect(() => {
@@ -152,7 +165,8 @@ function PhoneticWordFinderContent() {
     setHasSearched(true);
 
     setTimeout(() => {
-      let queryIPA = query;
+      let queryIpas: string[] = [];
+      let queryIPADisplay = query;
 
       const isIPAInput = /^[\/\[]/.test(query) || /[ɑæɔəɛɪʊʌɜθðʃʒŋɹ]/.test(query);
 
@@ -161,20 +175,41 @@ function PhoneticWordFinderContent() {
           item.word.toLowerCase() === query.toLowerCase()
         );
         if (found) {
-          queryIPA = found.ipa;
+          queryIpas = found.ipas;
+          queryIPADisplay = found.ipas.join(', ');
         } else {
           setError(`Could not find pronunciation for "${query}". Try IPA notation.`);
           setLoading(false);
           return;
         }
+      } else {
+        // If the user pastes multiple IPA variants, support comma-separated input.
+        queryIpas = splitIpaVariants(query);
+        queryIPADisplay = queryIpas.join(', ');
       }
 
       const searchResults = dictionary
-        .map((item: DictionaryEntry) => ({
-          ...item,
-          similarity: calculateSimilarity(queryIPA, item.ipa),
-          queryIPA
-        }))
+        .map((item: DictionaryEntry) => {
+          let bestSimilarity = -Infinity;
+          let bestItemIPA = item.ipas[0] || '';
+
+          for (const qIpa of queryIpas) {
+            for (const itemIpa of item.ipas) {
+              const similarity = calculateSimilarity(qIpa, itemIpa);
+              if (similarity > bestSimilarity) {
+                bestSimilarity = similarity;
+                bestItemIPA = itemIpa;
+              }
+            }
+          }
+
+          return {
+            word: item.word,
+            ipa: bestItemIPA,
+            similarity: Math.max(0, bestSimilarity),
+            queryIPA: queryIPADisplay,
+          };
+        })
         .filter((item: SearchResult) => item.similarity > 30)
         .sort((a: SearchResult, b: SearchResult) => b.similarity - a.similarity)
         .slice(0, MAX_RESULTS);
@@ -186,7 +221,7 @@ function PhoneticWordFinderContent() {
       setResults(initialResults);
       setLoading(false);
     }, 100);
-  }, [dictionary]);
+  }, [dictionary, splitIpaVariants]);
 
   // Update URL when state changes (but not during initialization)
   useEffect(() => {
@@ -239,10 +274,19 @@ function PhoneticWordFinderContent() {
         const text = await response.text();
         const lines = text.split('\n').filter(line => line.trim());
 
-        const dict = lines.map(line => {
-          const [word, ipa] = line.split('\t');
-          return { word: word.trim(), ipa: ipa ? ipa.trim() : '' };
-        }).filter(item => item.word && item.ipa);
+        const dict = lines
+          .map((line) => {
+            const tabIndex = line.indexOf('\t');
+            if (tabIndex === -1) return null;
+
+            const word = line.slice(0, tabIndex).trim();
+            const ipaField = line.slice(tabIndex + 1).trim();
+            const ipas = splitIpaVariants(ipaField);
+
+            if (!word || ipas.length === 0) return null;
+            return { word, ipas };
+          })
+          .filter((item): item is DictionaryEntry => Boolean(item));
 
         setDictionary(dict);
         setStatus(`Loaded ${dict.length.toLocaleString()} words`);
@@ -256,7 +300,7 @@ function PhoneticWordFinderContent() {
     };
 
     loadDictionary();
-  }, [language]);
+  }, [language, splitIpaVariants]);
 
   // Perform search when dictionary loads and we have a query from URL (only once on initial load)
   useEffect(() => {
