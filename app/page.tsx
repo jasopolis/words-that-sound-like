@@ -46,8 +46,8 @@ const LANGUAGES = [
 const LANGUAGE_EXAMPLES: Record<string, string[]> = {
   ar: ["كتاب", "ماء", "شمس"],
   de: ["Haus", "Buch", "Wasser"],
-  en_UK: ["bread", "knight", "through"],
-  en_US: ["bread", "knight", "through"],
+  en_UK: ["water", "/'dʒeɪs/", "bread"],
+  en_US: ["water", "/'dʒeɪs/", "bread"],
   eo: ["domo", "libro", "akvo"],
   es_ES: ["casa", "agua", "libro"],
   es_MX: ["casa", "agua", "libro"],
@@ -57,7 +57,6 @@ const LANGUAGE_EXAMPLES: Record<string, string[]> = {
   fr_QC: ["maison", "livre", "eau"],
   is: ["hús", "bók", "vatn"],
   ja: ["本", "水", "家"],
-  jam: ["house", "book", "wata"],
   km: ["ផ្ទះ", "សៀវភៅ", "ទឹក"],
   ko: ["집", "책", "물"],
   ma: ["rumah", "buku", "air"],
