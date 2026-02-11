@@ -2,7 +2,7 @@
 
 @theme {
   /* Colors - these become available as bg-*, text-*, border-* utilities */
-  --color-primary: #39424E;
+  --color-primary: #39424e;
 
   /* Font families - these become available as font-* utilities */
   --font-sans: "Didact Gothic", sans-serif;
@@ -10,6 +10,6 @@
 }
 
 body {
-  background-color: #39424E;
+  background-color: #39424e;
   font-family: var(--font-sans);
 }

@@ -1,6 +1,6 @@
 # Words That Sound Like
 
-A simple lookup tool for words that sound (phonetically) like a given word. 
+A simple lookup tool for words that sound (phonetically) like a given word.
 
 ## Similarity scores
 

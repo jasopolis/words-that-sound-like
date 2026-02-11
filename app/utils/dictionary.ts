@@ -9,13 +9,13 @@ export function splitIpaVariants(ipaField: string): string[] {
   // We keep each variant as its own IPA string so the phonetic
   // matcher doesn't treat commas/spaces as phonemes.
   return ipaField
-    .split(',')
+    .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 }
 
 export function parseDictionaryLine(line: string): DictionaryEntry | null {
-  const tabIndex = line.indexOf('\t');
+  const tabIndex = line.indexOf("\t");
   if (tabIndex === -1) return null;
 
   const word = line.slice(0, tabIndex).trim();
@@ -25,4 +25,3 @@ export function parseDictionaryLine(line: string): DictionaryEntry | null {
   if (!word || ipas.length === 0) return null;
   return { word, ipas };
 }
-
