@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { DictionaryEntry } from "./utils/dictionary";
 import { parseDictionaryLine, splitIpaVariants } from "./utils/dictionary";
 import { calculateSimilarity } from "./utils/phonetic";
+import { getWiktionaryUrl } from "./utils/wiktionary";
 
 // Language options
 const LANGUAGES = [
@@ -21,7 +22,6 @@ const LANGUAGES = [
   { code: "fr_QC", name: "French (Quebec)" },
   { code: "is", name: "Icelandic" },
   { code: "ja", name: "Japanese" },
-  { code: "jam", name: "Jamaican Creole" },
   { code: "km", name: "Khmer" },
   { code: "ko", name: "Korean" },
   { code: "ma", name: "Malay" },
@@ -355,7 +355,7 @@ function PhoneticWordFinderContent() {
             Words that sound like...
           </h1>
           <p className="text-lg font-light text-white">
-            Find words that sound like a given word across languages
+            Find words that sound like a given word!
           </p>
         </header>
 
@@ -471,7 +471,27 @@ function PhoneticWordFinderContent() {
                 >
                   <div className="flex-1">
                     <div className="text-lg mb-1 text-white/90">
-                      {result.word}
+                      {(() => {
+                        const wiktionaryUrl = getWiktionaryUrl(
+                          result.word,
+                          language,
+                        );
+                        if (wiktionaryUrl) {
+                          return (
+                            <a
+                              href={wiktionaryUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline decoration-white/20 hover:decoration-white/70 hover:text-white transition-colors"
+                              aria-label={`Open "${result.word}" on Wiktionary`}
+                              title="Open on Wiktionary"
+                            >
+                              {result.word}
+                            </a>
+                          );
+                        }
+                        return <span>{result.word}</span>;
+                      })()}
                     </div>
                     <div className="font-mono text-sm text-white/70">
                       {result.ipa}

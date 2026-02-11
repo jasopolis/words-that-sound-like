@@ -10,7 +10,8 @@ const didactGothic = Didact_Gothic({
 
 export const metadata: Metadata = {
   title: "Words That Sound Like...",
-  description: "Find words that sound like a given word across languages",
+  description:
+    "Find words that sound like a given word, supporting multiple languages.",
 };
 
 export default function RootLayout({
