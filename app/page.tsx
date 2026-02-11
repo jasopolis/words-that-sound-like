@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { calculateSimilarity } from './utils/phonetic';
 
 // Language options
@@ -87,7 +87,7 @@ type SearchResult = DictionaryEntry & {
   queryIPA: string;
 };
 
-export default function PhoneticWordFinder() {
+function PhoneticWordFinderContent() {
   const searchParams = useSearchParams();
   const [language, setLanguage] = useState('en_US');
   const [dictionary, setDictionary] = useState<DictionaryEntry[] | null>(null);
@@ -491,5 +491,20 @@ export default function PhoneticWordFinder() {
         </p>
       </footer>
     </div>
+  );
+}
+
+export default function PhoneticWordFinder() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block w-12 h-12 border-4 border-gray-400 border-t-white rounded-full animate-spin mb-4 opacity-30"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    }>
+      <PhoneticWordFinderContent />
+    </Suspense>
   );
 }
