@@ -44,8 +44,8 @@ const LANGUAGES = [
 const LANGUAGE_EXAMPLES: Record<string, string[]> = {
   'ar': ['كتاب', 'ماء', 'شمس'],
   'de': ['Haus', 'Buch', 'Wasser'],
-  'en_UK': ['phone', 'knight', 'through'],
-  'en_US': ['phone', 'knight', 'through'],
+  'en_UK': ['bread', 'knight', 'through'],
+  'en_US': ['bread', 'knight', 'through'],
   'eo': ['domo', 'libro', 'akvo'],
   'es_ES': ['casa', 'agua', 'libro'],
   'es_MX': ['casa', 'agua', 'libro'],
@@ -91,15 +91,23 @@ export default function PhoneticWordFinder() {
   const searchParams = useSearchParams();
   const [language, setLanguage] = useState('en_US');
   const [dictionary, setDictionary] = useState<DictionaryEntry[] | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(''); // The actual query used for search (synced with URL)
+  const [inputValue, setInputValue] = useState(''); // The input field value (not synced with URL)
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [allResults, setAllResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
   const [hasPerformedInitialSearch, setHasPerformedInitialSearch] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const hasSyncedFromUrlRef = useRef(false);
   const prevLanguageRef = useRef<string | null>(null);
+  const initialQueryRef = useRef<string | null>(null);
+
+  const INITIAL_ITEMS = 50;
+  const ITEMS_PER_LOAD = 50;
+  const MAX_RESULTS = 1000;
 
   // Initialize from query params (only once)
   useEffect(() => {
@@ -113,9 +121,15 @@ export default function PhoneticWordFinder() {
     }
     if (q) {
       setSearchQuery(q);
+      setInputValue(q);
+      initialQueryRef.current = q; // Store initial query for one-time search
     }
 
     setIsInitialized(true);
+    // Mark initial search as performed if there's no query, to prevent auto-search on typing
+    if (!q || !q.trim()) {
+      setHasPerformedInitialSearch(true);
+    }
     hasSyncedFromUrlRef.current = true;
   }, [searchParams]);
 
@@ -133,7 +147,9 @@ export default function PhoneticWordFinder() {
 
     setError('');
     setResults([]); // Clear previous results
+    setAllResults([]); // Clear all results
     setLoading(true);
+    setHasSearched(true);
 
     setTimeout(() => {
       let queryIPA = query;
@@ -161,9 +177,13 @@ export default function PhoneticWordFinder() {
         }))
         .filter((item: SearchResult) => item.similarity > 30)
         .sort((a: SearchResult, b: SearchResult) => b.similarity - a.similarity)
-        .slice(0, 50);
+        .slice(0, MAX_RESULTS);
 
-      setResults(searchResults);
+      setAllResults(searchResults);
+
+      // Set initial results
+      const initialResults = searchResults.slice(0, INITIAL_ITEMS);
+      setResults(initialResults);
       setLoading(false);
     }, 100);
   }, [dictionary]);
@@ -238,35 +258,51 @@ export default function PhoneticWordFinder() {
     loadDictionary();
   }, [language]);
 
-  // Perform search when dictionary loads and we have a query from URL
+  // Perform search when dictionary loads and we have a query from URL (only once on initial load)
   useEffect(() => {
     if (!isInitialized || !dictionary || dictionary.length === 0 || hasPerformedInitialSearch) return;
 
-    const q = searchParams.get('q');
-    if (q && q.trim()) {
-      performSearch(q);
+    // Use initialQueryRef which was set from URL during initialization (won't change on typing)
+    const initialQuery = initialQueryRef.current;
+    if (initialQuery && initialQuery.trim()) {
+      performSearch(initialQuery);
+      setHasPerformedInitialSearch(true);
+    } else {
+      // If no query in URL, mark as performed to prevent auto-search on typing
       setHasPerformedInitialSearch(true);
     }
-  }, [dictionary, isInitialized, searchParams, hasPerformedInitialSearch, performSearch]);
+  }, [dictionary, isInitialized, hasPerformedInitialSearch, performSearch]);
 
-  // Rerun search when language changes (if we have a query)
+  // Clear results/error when language changes (but don't auto-submit)
   useEffect(() => {
     // Skip on initial mount
     if (prevLanguageRef.current === null) {
       prevLanguageRef.current = language;
       return;
     }
-
-    // Only rerun if language actually changed and we have a query and dictionary
-    if (prevLanguageRef.current !== language && dictionary && dictionary.length > 0 && searchQuery.trim()) {
-      performSearch(searchQuery);
+    // Clear results and error
+    if (prevLanguageRef.current !== language) {
+      setResults([]); // Clear previous results
+      setAllResults([]); // Clear all results
+      setLoading(false);
+      setHasSearched(false);
     }
 
     prevLanguageRef.current = language;
-  }, [language, dictionary, searchQuery, performSearch]);
+  }, [language]);
+
+  const handleShowMore = () => {
+    const nextCount = Math.min(results.length + ITEMS_PER_LOAD, allResults.length);
+    setResults(allResults.slice(0, nextCount));
+  };
+
+  const handleShowAll = () => {
+    setResults(allResults);
+  };
 
   const handleSearch = () => {
-    performSearch(searchQuery);
+    setSearchQuery(inputValue); // Update searchQuery (which will update URL) and perform search
+    performSearch(inputValue);
   };
 
   return (
@@ -303,8 +339,8 @@ export default function PhoneticWordFinder() {
           <div className="flex gap-2 mb-3">
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               placeholder="Enter a word or IPA notation..."
               disabled={loading}
@@ -331,7 +367,8 @@ export default function PhoneticWordFinder() {
               <button
                 key={example}
                 onClick={() => {
-                  setSearchQuery(example);
+                  setInputValue(example);
+                  setSearchQuery(example); // Update searchQuery (which will update URL)
                   performSearch(example);
                 }}
                 disabled={loading}
@@ -366,7 +403,7 @@ export default function PhoneticWordFinder() {
                 Results for <span className="font-mono text-white/90">{results[0].queryIPA}</span>
               </h2>
               <span className="px-3 py-1 bg-gray-400/20 text-gray-400 text-sm rounded-full">
-                {results.length} matches
+                {allResults.length.toLocaleString()} matches
               </span>
             </div>
 
@@ -390,11 +427,29 @@ export default function PhoneticWordFinder() {
                 </div>
               ))}
             </div>
+
+            {/* Show more / Show all buttons */}
+            {results.length < allResults.length && (
+              <div className="mt-6 flex items-center justify-center gap-3">
+                <button
+                  onClick={handleShowMore}
+                  className="px-6 py-2 bg-transparent border border-gray-400 rounded text-gray-400 hover:text-white hover:border-white focus:outline-none focus:ring-1 focus:ring-white transition-colors"
+                >
+                  Show more
+                </button>
+                <button
+                  onClick={handleShowAll}
+                  className="px-6 py-2 bg-transparent border border-gray-400 rounded text-gray-400 hover:text-white hover:border-white focus:outline-none focus:ring-1 focus:ring-white transition-colors"
+                >
+                  Show all ({allResults.length.toLocaleString()})
+                </button>
+              </div>
+            )}
           </article>
         )}
 
         {/* No results */}
-        {!loading && results.length === 0 && !error && searchQuery && (
+        {!loading && results.length === 0 && !error && searchQuery && hasSearched && (
           <div className="text-center py-16">
             <p className="text-gray-400 text-lg">
               No similar words found. Try a different query.
