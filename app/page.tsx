@@ -2,6 +2,8 @@
 
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import type { DictionaryEntry } from './utils/dictionary';
+import { parseDictionaryLine, splitIpaVariants } from './utils/dictionary';
 import { calculateSimilarity } from './utils/phonetic';
 
 // Language options
@@ -77,11 +79,6 @@ const LANGUAGE_EXAMPLES: Record<string, string[]> = {
 };
 
 
-type DictionaryEntry = {
-  word: string;
-  ipas: string[];
-};
-
 type SearchResult = {
   word: string;
   ipa: string;
@@ -110,17 +107,6 @@ function PhoneticWordFinderContent() {
   const INITIAL_ITEMS = 50;
   const ITEMS_PER_LOAD = 50;
   const MAX_RESULTS = 1000;
-
-  const splitIpaVariants = useCallback((ipaField: string): string[] => {
-    // Raw data can contain multiple pronunciations like:
-    //   /tɝˈeɪsə/, /tɝˈisə/
-    // We keep each variant as its own IPA string so the phonetic
-    // matcher doesn't treat commas/spaces as phonemes.
-    return ipaField
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }, []);
 
   // Initialize from query params (only once)
   useEffect(() => {
@@ -221,7 +207,7 @@ function PhoneticWordFinderContent() {
       setResults(initialResults);
       setLoading(false);
     }, 100);
-  }, [dictionary, splitIpaVariants]);
+  }, [dictionary]);
 
   // Update URL when state changes (but not during initialization)
   useEffect(() => {
@@ -275,17 +261,7 @@ function PhoneticWordFinderContent() {
         const lines = text.split('\n').filter(line => line.trim());
 
         const dict = lines
-          .map((line) => {
-            const tabIndex = line.indexOf('\t');
-            if (tabIndex === -1) return null;
-
-            const word = line.slice(0, tabIndex).trim();
-            const ipaField = line.slice(tabIndex + 1).trim();
-            const ipas = splitIpaVariants(ipaField);
-
-            if (!word || ipas.length === 0) return null;
-            return { word, ipas };
-          })
+          .map(parseDictionaryLine)
           .filter((item): item is DictionaryEntry => Boolean(item));
 
         setDictionary(dict);
@@ -300,7 +276,7 @@ function PhoneticWordFinderContent() {
     };
 
     loadDictionary();
-  }, [language, splitIpaVariants]);
+  }, [language]);
 
   // Perform search when dictionary loads and we have a query from URL (only once on initial load)
   useEffect(() => {
